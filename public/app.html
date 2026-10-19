@@ -5,31 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Mon WhatsApp</title>
     <style>
-        * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; margin: 0; height: 100vh; background: #e5ddd5; overflow: hidden; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; height: 100dvh; background: #e5ddd5; overflow: hidden; display: flex; flex-direction: column; }
         
         /* ECRAN 1 : LISTE */
         #liste-ecran { display: flex; flex-direction: column; height: 100%; background: white; }
         .header-list { background: #075e54; color: white; padding: 15px; font-size: 1.2em; font-weight: bold; }
+        
+        .tabs { display: flex; background: #f0f0f0; border-bottom: 1px solid #ddd; }
+        .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; font-weight: bold; color: #555; }
+        .tab.active { color: #075e54; border-bottom: 3px solid #075e54; background: white; }
+
         .contact-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
         .contact-item:hover { background: #f5f5f5; }
         .avatar { width: 50px; height: 50px; border-radius: 50%; background: #ccc; margin-right: 15px; object-fit: cover; }
         .contact-info { flex: 1; }
         .contact-name { font-weight: bold; font-size: 1.1em; margin-bottom: 3px; }
         .contact-preview { color: #888; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-        .badge { background: #25d366; color: white; border-radius: 50%; padding: 3px 8px; font-size: 0.8em; font-weight: bold; margin-left: 10px; }
+        .badge { background: #25d366; color: white; border-radius: 50%; padding: 4px 8px; font-size: 0.8em; font-weight: bold; }
 
         /* ECRAN 2 : CHAT */
         #chat-ecran { display: none; flex-direction: column; height: 100%; }
-        .header-chat { background: #075e54; color: white; padding: 10px 15px; display: flex; align-items: center; font-weight: bold; }
+        .header-chat { background: #075e54; color: white; padding: 10px 15px; display: flex; align-items: center; font-weight: bold; flex-shrink: 0; }
         .back-btn { font-size: 1.5em; margin-right: 15px; cursor: pointer; }
-        .messages { flex: 1; padding: 15px; overflow-y: auto; background: #e5ddd5; }
-        .message { margin-bottom: 10px; padding: 10px; border-radius: 8px; max-width: 80%; clear: both; word-wrap: break-word; }
-        .inbound { background: white; float: left; }
-        .outbound { background: #dcf8c6; float: right; }
+        .messages { flex: 1; padding: 15px; overflow-y: auto; background: #e5ddd5; display: flex; flex-direction: column; }
+        .message { margin-bottom: 10px; padding: 10px; border-radius: 8px; max-width: 80%; word-wrap: break-word; position: relative; }
+        .inbound { background: white; align-self: flex-start; }
+        .outbound { background: #dcf8c6; align-self: flex-end; }
+        .message img { max-width: 100%; border-radius: 5px; margin-top: 5px; display: block; cursor: pointer;}
         .check { font-size: 0.7em; color: #999; margin-left: 5px; float: right; margin-top: 5px;}
         .check.blue { color: #34b7f1; }
-        .input-area { display: flex; padding: 10px; background: #f0f0f0; align-items: center; }
+        
+        .input-area { display: flex; padding: 10px; background: #f0f0f0; align-items: center; flex-shrink: 0; }
         .input-area input[type="text"] { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 20px; margin-right: 10px; font-size: 1em; }
         .input-area button { background: #075e54; color: white; border: none; padding: 12px 20px; border-radius: 20px; cursor: pointer; }
         .file-btn { background: #128c7e; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; margin-right: 10px; font-size: 1.2em; }
@@ -39,7 +46,11 @@
 
     <div id="liste-ecran">
         <div class="header-list">Discussions</div>
-        <div id="contacts-list"></div>
+        <div class="tabs">
+            <div id="tab-non-lus" class="tab active" onclick="changerOnglet('non-lus')">Non lus</div>
+            <div id="tab-lus" class="tab" onclick="changerOnglet('lus')">Lus</div>
+        </div>
+        <div id="contacts-list" style="flex: 1; overflow-y: auto;"></div>
     </div>
 
     <div id="chat-ecran">
@@ -60,32 +71,61 @@
     <script>
         const SUPABASE_URL = "https://nppaqxfbsjtiguakfkat.supabase.co";
         const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
-        let currentContact = null, currentName = "";
+        let currentContact = null, currentName = "", currentOnglet = 'non-lus';
 
         async function chargerContacts() {
-            const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name,profile_picture,content,is_read&order=created_at.desc`, {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name,profile_picture,content,is_read,media_url&order=created_at.desc`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
             const data = await res.json();
+            
             const contacts = {};
             data.forEach(m => { 
                 if (!contacts[m.contact_number]) {
-                    contacts[m.contact_number] = { name: m.contact_name, photo: m.profile_picture, lastMsg: m.content, unreadCount: 0 };
+                    contacts[m.contact_number] = { 
+                        name: m.contact_name, 
+                        photo: m.profile_picture, 
+                        lastMsg: m.content, 
+                        unreadCount: 0 
+                    };
                 }
                 if (m.direction === 'inbound' && m.is_read === false) contacts[m.contact_number].unreadCount++;
             });
 
             const list = document.getElementById('contacts-list');
             list.innerHTML = '';
+            
             for (const [num, info] of Object.entries(contacts)) {
+                // Filtrage selon l'onglet
+                if (currentOnglet === 'non-lus' && info.unreadCount === 0) continue;
+                if (currentOnglet === 'lus' && info.unreadCount > 0) continue;
+
                 const div = document.createElement('div');
                 div.className = 'contact-item';
                 div.onclick = () => ouvrirConversation(num, info.name, info.photo);
+                
                 const badgeHtml = info.unreadCount > 0 ? `<div class="badge">${info.unreadCount}</div>` : '';
                 const imgHtml = info.photo ? `<img src="${info.photo}" class="avatar">` : `<div class="avatar"></div>`;
-                div.innerHTML = `${imgHtml}<div class="contact-info"><div class="contact-name">${info.name || num}</div><div class="contact-preview">${info.lastMsg}</div></div>${badgeHtml}`;
+                
+                div.innerHTML = `
+                    ${imgHtml}
+                    <div class="contact-info">
+                        <div class="contact-name">${info.name || num}</div>
+                        <div class="contact-preview">${info.lastMsg}</div>
+                    </div>
+                    ${badgeHtml}
+                `;
                 list.appendChild(div);
             }
+            
+            if(list.innerHTML === '') list.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Aucune discussion ici.</div>';
+        }
+
+        function changerOnglet(onglet) {
+            currentOnglet = onglet;
+            document.getElementById('tab-non-lus').classList.toggle('active', onglet === 'non-lus');
+            document.getElementById('tab-lus').classList.toggle('active', onglet === 'lus');
+            chargerContacts();
         }
 
         async function ouvrirConversation(num, nom, photo) {
@@ -123,7 +163,11 @@
                 const d = document.createElement('div');
                 d.className = `message ${m.direction}`;
                 let checkHtml = m.direction === 'outbound' ? (m.wa_message_id ? '<span class="check blue">✓✓</span>' : '<span class="check">✓</span>') : '';
-                d.innerHTML = m.content + checkHtml;
+                
+                // Affichage du texte ET de l'image si elle existe
+                let imgHtml = m.media_url ? `<img src="${m.media_url}" onclick="window.open(this.src)">` : '';
+                d.innerHTML = `${m.content} ${imgHtml} ${checkHtml}`;
+                
                 area.appendChild(d);
             });
             area.scrollTop = area.scrollHeight;
