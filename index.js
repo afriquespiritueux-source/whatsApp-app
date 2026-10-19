@@ -6,7 +6,7 @@ app.use(express.static('public'));
 
 const VERIFY_TOKEN = "mon_token_secret_123";
 // ⚠️ REMETTEZ VOTRE TOKEN ICI (celui qui commence par EAAT...)
-const WHATSAPP_TOKEN = "EAATttGsWz8kBS1BrfxcrGnxoWh6AWh7Wg0ilWZC5T7yFVWp4JWWrNR6lk3Et0NitcZAn0QZCQxNZBxTCvtXvpLdzr9SmH1gMIdWIjCK1WGElPZCUFc61Qjy28yfWgPIlL2sX1TF2d5H66WxxszUkZCw6WT2VkMbO6T5ZCZCZB1UHubQxe2NLi4eA5NhQCJZAjck9m5j7y3WZCttI0Dn4j6uaIEDqIBfrloFTCMhbQZDZD"; 
+const WHATSAPP_TOKEN = "EAATttGsWz8kBS4xuTKZApLUgEuBSHUfwna0625yZCZBA3XjegLWCUU3shk9qbnkrkH8XPMklAOBcnloH3ssoOdABmn1R1vHDiCYnpV7XhAAZCUchuV12SeMYUogtJZAJdpAfNG5c3hy2frZA5YiqJiQOIO1lGJcYW2wWqeutWBLS7uveBMnsqJBi30hJbrpwZDZD"; 
 const PHONE_NUMBER_ID = "1360862047116900";
 const SUPABASE_URL = "https://nppaqxfbsjtiguakfkat.supabase.co";
 const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
