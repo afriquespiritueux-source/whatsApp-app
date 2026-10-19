@@ -62,15 +62,17 @@
 
         // Fonction pour dire directement à Supabase de marquer comme lu
         async function marquerCommeLuDirectement(num) {
-            await fetch(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${num}&direction=eq.inbound`, {
-                method: 'PATCH',
-                headers: { 
-                    "apikey": SUPABASE_KEY, 
-                    "Authorization": `Bearer ${SUPABASE_KEY}`, 
-                    "Content-Type": "application/json" 
-                },
-                body: JSON.stringify({ is_read: true })
-            });
+            try {
+                await fetch(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${num}&direction=eq.inbound`, {
+                    method: 'PATCH',
+                    headers: { 
+                        "apikey": SUPABASE_KEY, 
+                        "Authorization": `Bearer ${SUPABASE_KEY}`, 
+                        "Content-Type": "application/json" 
+                    },
+                    body: JSON.stringify({ is_read: true })
+                });
+            } catch(e) { console.log("Erreur marquage lu", e); }
         }
 
         async function chargerContacts() {
@@ -88,6 +90,7 @@
                         unreadCount: 0 
                     };
                 }
+                // On ne compte que les messages entrants non lus
                 if (m.direction === 'inbound' && m.is_read === false) {
                     contacts[m.contact_number].unreadCount++;
                 }
@@ -121,10 +124,9 @@
             document.getElementById('chat-ecran').style.display = 'flex';
             document.getElementById('chat-nom').innerText = nom;
 
-            // 1. On marque comme lu DIRECTEMENT dans Supabase
+            // On marque comme lu
             await marquerCommeLuDirectement(num);
             
-            // 2. On affiche les messages
             chargerMessages();
         }
 
@@ -132,7 +134,7 @@
             document.getElementById('chat-ecran').style.display = 'none';
             document.getElementById('liste-ecran').style.display = 'flex';
             currentContact = null;
-            chargerContacts(); // Le badge aura disparu
+            chargerContacts(); 
         }
 
         async function chargerMessages() {
@@ -158,13 +160,13 @@
             if (!input.value || !currentContact) return;
             input.disabled = true;
             
-            // On envoie le message via le serveur Render
+            // 1. Envoi du message
             await fetch('/api/send', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ to: currentContact, text: input.value })
             });
             
-            // DÈS QU'ON RÉPOND, ON FORCE SUPABASE À METTRE LE BADGE À ZÉRO
+            // 2. On marque comme lu DIRECTEMENT (ça va marcher maintenant que le RLS est désactivé)
             await marquerCommeLuDirectement(currentContact);
 
             input.value = '';
@@ -181,10 +183,7 @@
             document.getElementById('image-input').value = ''; 
             
             await fetch('/api/send-image', { method: 'POST', body: formData });
-            
-            // Même chose pour les images
             await marquerCommeLuDirectement(currentContact);
-            
             chargerMessages();
         }
 
