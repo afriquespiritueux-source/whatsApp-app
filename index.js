@@ -2,14 +2,16 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 app.use(express.json());
-app.use(express.static('public')); // <-- LA LIGNE MAGIQUE POUR AFFICHER LE SITE
+app.use(express.static('public'));
 
 const VERIFY_TOKEN = "mon_token_secret_123";
-const WHATSAPP_TOKEN = "EAATttGsWz8kBS1BrfxcrGnxoWh6AWh7Wg0ilWZC5T7yFVWp4JWWrNR6lk3Et0NitcZAn0QZCQxNZBxTCvtXvpLdzr9SmH1gMIdWIjCK1WGElPZCUFc61Qjy28yfWgPIlL2sX1TF2d5H66WxxszUkZCw6WT2VkMbO6T5ZCZCZB1UHubQxe2NLi4eA5NhQCJZAjck9m5j7y3WZCttI0Dn4j6uaIEDqIBfrloFTCMhbQZDZD";
+// ⚠️ REMETTEZ VOTRE TOKEN ICI (celui qui commence par EAAT...)
+const WHATSAPP_TOKEN = "EAATttGsWz8kBS1BrfxcrGnxoWh6AWh7Wg0ilWZC5T7yFVWp4JWWrNR6lk3Et0NitcZAn0QZCQxNZBxTCvtXvpLdzr9SmH1gMIdWIjCK1WGElPZCUFc61Qjy28yfWgPIlL2sX1TF2d5H66WxxszUkZCw6WT2VkMbO6T5ZCZCZB1UHubQxe2NLi4eA5NhQCJZAjck9m5j7y3WZCttI0Dn4j6uaIEDqIBfrloFTCMhbQZDZD"; 
 const PHONE_NUMBER_ID = "1360862047116900";
 const SUPABASE_URL = "https://nppaqxfbsjtiguakfkat.supabase.co";
 const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
 
+// 1. Vérification du Webhook
 app.get('/webhook', (req, res) => {
     if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
         res.send(req.query['hub.challenge']);
@@ -18,6 +20,7 @@ app.get('/webhook', (req, res) => {
     }
 });
 
+// 2. Réception des messages de WhatsApp
 app.post('/webhook', async (req, res) => {
     try {
         const body = req.body;
@@ -51,9 +54,11 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
+// 3. ENVOI DE MESSAGE DEPUIS L'INTERFACE (C'est ici que ça bloquait)
 app.post('/api/send', async (req, res) => {
     const { to, text } = req.body;
     try {
+        // A. Envoyer sur WhatsApp
         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, {
             messaging_product: 'whatsapp',
             to: to,
@@ -63,6 +68,7 @@ app.post('/api/send', async (req, res) => {
             headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
         });
 
+        // B. Enregistrer dans Supabase pour l'afficher dans l'interface
         await axios.post(`${SUPABASE_URL}/rest/v1/messages`, {
             contact_number: to,
             contact_name: 'Moi',
@@ -78,11 +84,12 @@ app.post('/api/send', async (req, res) => {
 
         res.json({ success: true });
     } catch (error) {
+        console.error("Erreur d'envoi:", error.response ? error.response.data : error.message);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Route pour afficher la page HTML
+// 4. Afficher la page HTML
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/app.html');
 });
