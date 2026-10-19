@@ -2,40 +2,57 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Mon WhatsApp</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; display: flex; height: 100vh; background: #f0f2f5; }
-        .sidebar { width: 30%; background: white; border-right: 1px solid #ddd; overflow-y: auto; }
-        .contact { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: center; }
-        .contact:hover { background: #f5f5f5; }
-        .contact.active { background: #e9edef; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #ccc; margin-right: 10px; object-fit: cover; }
-        .chat-area { width: 70%; display: flex; flex-direction: column; }
-        .chat-header { padding: 15px; background: #075e54; color: white; font-weight: bold; display: flex; align-items: center; cursor: pointer; }
-        .messages { flex: 1; padding: 20px; overflow-y: auto; background: #e5ddd5; }
-        .message { margin-bottom: 10px; padding: 10px; border-radius: 8px; max-width: 60%; clear: both; word-wrap: break-word; position: relative; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 0; height: 100vh; background: #e5ddd5; overflow: hidden; }
+        
+        /* ÉCRAN 1 : LISTE DES DISCUSSIONS */
+        #liste-ecran { display: flex; flex-direction: column; height: 100%; background: white; }
+        .header-list { background: #075e54; color: white; padding: 15px; font-size: 1.2em; font-weight: bold; }
+        .contact-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .contact-item:hover { background: #f5f5f5; }
+        .avatar { width: 50px; height: 50px; border-radius: 50%; background: #ccc; margin-right: 15px; object-fit: cover; }
+        .contact-info { flex: 1; }
+        .contact-name { font-weight: bold; font-size: 1.1em; margin-bottom: 3px; }
+        .contact-preview { color: #888; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+        .badge { background: #25d366; color: white; border-radius: 50%; padding: 3px 8px; font-size: 0.8em; font-weight: bold; margin-left: 10px; }
+
+        /* ÉCRAN 2 : DISCUSSION */
+        #chat-ecran { display: none; flex-direction: column; height: 100%; }
+        .header-chat { background: #075e54; color: white; padding: 10px 15px; display: flex; align-items: center; font-weight: bold; }
+        .back-btn { font-size: 1.5em; margin-right: 15px; cursor: pointer; }
+        .messages { flex: 1; padding: 15px; overflow-y: auto; background: #e5ddd5; }
+        .message { margin-bottom: 10px; padding: 10px; border-radius: 8px; max-width: 80%; clear: both; word-wrap: break-word; }
         .inbound { background: white; float: left; }
         .outbound { background: #dcf8c6; float: right; }
-        .check { font-size: 0.7em; color: #999; margin-left: 5px; }
+        .check { font-size: 0.7em; color: #999; margin-left: 5px; float: right; margin-top: 5px;}
         .check.blue { color: #34b7f1; }
-        .input-area { display: flex; padding: 10px; background: #f0f0f0; border-top: 1px solid #ddd; align-items: center; }
-        .input-area input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; margin-right: 10px; }
-        .input-area button { background: #075e54; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
+        .input-area { display: flex; padding: 10px; background: #f0f0f0; align-items: center; }
+        .input-area input[type="text"] { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 20px; margin-right: 10px; font-size: 1em; }
+        .input-area button { background: #075e54; color: white; border: none; padding: 12px 20px; border-radius: 20px; cursor: pointer; }
         .file-btn { background: #128c7e; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; margin-right: 10px; font-size: 1.2em; }
-        .my-photo-btn { position: fixed; bottom: 10px; left: 10px; background: #075e54; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; z-index: 999; }
     </style>
 </head>
 <body>
-    <input type="file" id="my-photo-input" accept="image/*" style="display:none;" onchange="uploadMyPhoto()">
-    <button class="my-photo-btn" onclick="document.getElementById('my-photo-input').click()">📷</button>
 
-    <div class="sidebar" id="sidebar"></div>
-    <div class="chat-area">
-        <div class="chat-header" id="chat-header">Sélectionnez une conversation</div>
+    <!-- ÉCRAN 1 : LISTE DES DISCUSSIONS -->
+    <div id="liste-ecran">
+        <div class="header-list">Discussions</div>
+        <div id="contacts-list"></div>
+    </div>
+
+    <!-- ÉCRAN 2 : DISCUSSION -->
+    <div id="chat-ecran">
+        <div class="header-chat">
+            <span class="back-btn" onclick="retourListe()">&#8592;</span>
+            <img id="chat-avatar" class="avatar" style="width:35px; height:35px; margin-right:10px; display:none;">
+            <span id="chat-nom"></span>
+        </div>
         <div class="messages" id="messages-area"></div>
-        <div class="input-area" id="input-area" style="display: none;">
-            <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="envoyerImage()">
+        <div class="input-area">
+            <input type="file" id="image-input" accept="image/*,video/*" style="display:none;" onchange="envoyerMedia()">
             <button class="file-btn" onclick="document.getElementById('image-input').click()">📎</button>
             <input type="text" id="message-input" placeholder="Tapez un message...">
             <button onclick="envoyerMessage()">Envoyer</button>
@@ -45,89 +62,146 @@
     <script>
         const SUPABASE_URL = "https://nppaqxfbsjtiguakfkat.supabase.co";
         const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
-        let currentContact = null, currentName = "", currentPhoto = "";
+        let currentContact = null, currentName = "";
 
+        // --- ECRAN 1 : LISTE DES CONTACTS ---
         async function chargerContacts() {
-            const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name,profile_picture&order=created_at.desc`, {
-                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-            });
-            const data = await res.json();
-            const contacts = {};
-            data.forEach(m => { if (!contacts[m.contact_number]) contacts[m.contact_number] = { name: m.contact_name, photo: m.profile_picture }; });
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name,profile_picture,content,is_read&order=created_at.desc`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+                const data = await res.json();
+                
+                const contacts = {};
+                // On regroupe par numéro de téléphone
+                data.forEach(m => { 
+                    if (!contacts[m.contact_number]) {
+                        contacts[m.contact_number] = { 
+                            name: m.contact_name, 
+                            photo: m.profile_picture, 
+                            lastMsg: m.content,
+                            unreadCount: 0 
+                        };
+                    }
+                    // On compte les messages non lus
+                    if (m.direction === 'inbound' && m.is_read === false) {
+                        contacts[m.contact_number].unreadCount++;
+                    }
+                });
 
-            const sidebar = document.getElementById('sidebar');
-            sidebar.innerHTML = '';
-            for (const [num, info] of Object.entries(contacts)) {
-                const div = document.createElement('div');
-                div.className = 'contact' + (num === currentContact ? ' active' : '');
-                div.onclick = () => chargerConversation(num, info.name, info.photo);
-                const img = info.photo ? `<img src="${info.photo}" class="avatar">` : `<div class="avatar"></div>`;
-                div.innerHTML = `${img}<div><b>${info.name}</b><br><small>${num}</small></div>`;
-                sidebar.appendChild(div);
-            }
-        }
-
-        async function chargerConversation(num, nom, photo) {
-            currentContact = num; currentName = nom; currentPhoto = photo;
-            const h = document.getElementById('chat-header');
-            h.innerHTML = (photo ? `<img src="${photo}" class="avatar" style="width:30px;height:30px;margin-right:10px;">` : '') + nom;
-            h.onclick = () => alert(`Nom : ${nom}\nNuméro : ${num}`);
-            document.getElementById('input-area').style.display = 'flex';
-
-            const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${num}&order=created_at.asc`, {
-                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-            });
-            const msgs = await res.json();
-            const area = document.getElementById('messages-area');
-            area.innerHTML = '';
-            msgs.forEach(m => {
-                const d = document.createElement('div');
-                d.className = `message ${m.direction}`;
-                let checkHtml = '';
-                if (m.direction === 'outbound') {
-                    // On affiche une double coche bleue si le message a un ID WhatsApp (donc envoyé)
-                    checkHtml = m.wa_message_id ? '<span class="check blue">✓✓</span>' : '<span class="check">✓</span>';
+                const list = document.getElementById('contacts-list');
+                list.innerHTML = '';
+                
+                for (const [num, info] of Object.entries(contacts)) {
+                    const div = document.createElement('div');
+                    div.className = 'contact-item';
+                    div.onclick = () => ouvrirConversation(num, info.name);
+                    
+                    // Badge vert
+                    const badgeHtml = info.unreadCount > 0 ? `<div class="badge">${info.unreadCount}</div>` : '';
+                    
+                    // Photo ou avatar gris
+                    const imgHtml = info.photo ? `<img src="${info.photo}" class="avatar">` : `<div class="avatar"></div>`;
+                    
+                    div.innerHTML = `
+                        ${imgHtml}
+                        <div class="contact-info">
+                            <div class="contact-name">${info.name || num}</div>
+                            <div class="contact-preview">${info.lastMsg}</div>
+                        </div>
+                        ${badgeHtml}
+                    `;
+                    list.appendChild(div);
                 }
-                d.innerHTML = m.content + checkHtml;
-                area.appendChild(d);
-            });
-            area.scrollTop = area.scrollHeight;
+            } catch (e) { console.error(e); }
         }
 
+        // --- ECRAN 2 : CONVERSATION ---
+        async function ouvrirConversation(num, nom) {
+            currentContact = num; currentName = nom;
+            
+            document.getElementById('liste-ecran').style.display = 'none';
+            document.getElementById('chat-ecran').style.display = 'flex';
+            document.getElementById('chat-nom').innerText = nom || num;
+            
+            // Marquer comme lu dans Supabase
+            await fetch('/api/mark-read', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contact_number: num })
+            });
+
+            await chargerMessages();
+        }
+
+        function retourListe() {
+            document.getElementById('chat-ecran').style.display = 'none';
+            document.getElementById('liste-ecran').style.display = 'flex';
+            currentContact = null;
+            chargerContacts(); // Recharger la liste pour mettre à jour les badges
+        }
+
+        async function chargerMessages() {
+            if (!currentContact) return;
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${currentContact}&order=created_at.asc`, {
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+                });
+                const msgs = await res.json();
+                const area = document.getElementById('messages-area');
+                area.innerHTML = '';
+                msgs.forEach(m => {
+                    const d = document.createElement('div');
+                    d.className = `message ${m.direction}`;
+                    
+                    let checkHtml = '';
+                    if (m.direction === 'outbound') {
+                        checkHtml = m.wa_message_id ? '<span class="check blue">✓✓</span>' : '<span class="check">✓</span>';
+                    }
+                    d.innerHTML = m.content + checkHtml;
+                    area.appendChild(d);
+                });
+                area.scrollTop = area.scrollHeight;
+            } catch(e) { console.error(e); }
+        }
+
+        // --- ENVOI DE MESSAGE ---
         async function envoyerMessage() {
             const input = document.getElementById('message-input');
-            if (!input.value) return;
-            await fetch('/api/send', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: currentContact, text: input.value })
-            });
-            input.value = '';
-            chargerConversation(currentContact, currentName, currentPhoto);
+            if (!input.value || !currentContact) return;
+            input.disabled = true;
+            try {
+                await fetch('/api/send', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: currentContact, text: input.value })
+                });
+                input.value = '';
+            } catch(e) { console.error(e); }
+            input.disabled = false;
+            chargerMessages();
         }
 
-        async function envoyerImage() {
+        // --- ENVOI DE MEDIA ---
+        async function envoyerMedia() {
             const file = document.getElementById('image-input').files[0];
-            if (!file) return;
+            if (!file || !currentContact) return;
             const formData = new FormData();
             formData.append('image', file);
             formData.append('to', currentContact);
-            alert("Envoi de l'image en cours...");
-            await fetch('/api/send-image', { method: 'POST', body: formData });
-            chargerConversation(currentContact, currentName, currentPhoto);
+            alert("Envoi en cours...");
+            try {
+                await fetch('/api/send-image', { method: 'POST', body: formData });
+            } catch(e) { console.error(e); }
+            chargerMessages();
         }
 
-        async function uploadMyPhoto() {
-            const file = document.getElementById('my-photo-input').files[0];
-            if (!file) return;
-            const formData = new FormData();
-            formData.append('image', file);
-            alert("Upload de votre photo...");
-            await fetch('/api/upload-my-photo', { method: 'POST', body: formData });
-            alert("Photo mise à jour !");
-        }
-
+        // Lancement
         window.onload = chargerContacts;
-        setInterval(() => { if (currentContact) chargerConversation(currentContact, currentName, currentPhoto); else chargerContacts(); }, 3000);
+        
+        // Actualisation automatique (toutes les 3 secondes si on est dans la liste ou le chat)
+        setInterval(() => {
+            if (currentContact) chargerMessages();
+            else chargerContacts();
+        }, 3000);
     </script>
 </body>
 </html>
