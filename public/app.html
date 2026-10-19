@@ -61,23 +61,25 @@
         let currentContact = null;
 
         async function chargerContacts() {
-            // On récupère l'historique complet, trié du plus récent au plus ancien
+            // On récupère TOUT l'historique
             const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name,content,is_read,direction&order=created_at.desc`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
             const data = await res.json();
             
             const contacts = {};
+            // On parcourt les messages du plus récent au plus ancien
             data.forEach(m => { 
+                // Si on n'a pas encore enregistré ce numéro
                 if (!contacts[m.contact_number]) {
-                    // CORRECTION : On ne prend le nom QUE si ce n'est pas "Moi"
                     contacts[m.contact_number] = { 
-                        name: m.contact_name !== 'Moi' ? m.contact_name : m.contact_number, 
+                        // Si le nom est "Moi", on ne l'affiche pas, on garde le numéro
+                        name: (m.contact_name && m.contact_name !== 'Moi') ? m.contact_name : m.contact_number, 
                         lastMsg: m.content, 
                         unreadCount: 0 
                     };
                 }
-                // CORRECTION : On compte les non lus uniquement si le message est entrant
+                // Si un message entrant n'est pas lu, on ajoute 1 au compteur
                 if (m.direction === 'inbound' && m.is_read === false) {
                     contacts[m.contact_number].unreadCount++;
                 }
@@ -91,7 +93,6 @@
                 div.className = 'contact-item';
                 div.onclick = () => ouvrirConversation(num, info.name);
                 
-                // On affiche le badge SEULEMENT s'il y a des non lus
                 const badgeHtml = info.unreadCount > 0 ? `<div class="badge">${info.unreadCount}</div>` : '';
                 
                 div.innerHTML = `
@@ -112,7 +113,7 @@
             document.getElementById('chat-ecran').style.display = 'flex';
             document.getElementById('chat-nom').innerText = nom;
 
-            // Marquer comme lu
+            // On dit au serveur de marquer comme lu (cette fois, ça marchera car on utilise le numéro)
             await fetch('/api/mark-read', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contact_number: num })
