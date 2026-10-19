@@ -60,6 +60,19 @@
         const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
         let currentContact = null;
 
+        // Fonction pour dire directement à Supabase de marquer comme lu
+        async function marquerCommeLuDirectement(num) {
+            await fetch(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${num}&direction=eq.inbound`, {
+                method: 'PATCH',
+                headers: { 
+                    "apikey": SUPABASE_KEY, 
+                    "Authorization": `Bearer ${SUPABASE_KEY}`, 
+                    "Content-Type": "application/json" 
+                },
+                body: JSON.stringify({ is_read: true })
+            });
+        }
+
         async function chargerContacts() {
             const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name,content,is_read,direction&order=created_at.desc`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
@@ -71,7 +84,7 @@
                 if (!contacts[m.contact_number]) {
                     contacts[m.contact_number] = { 
                         name: (m.contact_name && m.contact_name !== 'Moi') ? m.contact_name : m.contact_number, 
-                        lastMsg: m.content, 
+                        lastMsg: m.content || "Nouveau message", 
                         unreadCount: 0 
                     };
                 }
@@ -108,27 +121,19 @@
             document.getElementById('chat-ecran').style.display = 'flex';
             document.getElementById('chat-nom').innerText = nom;
 
-            // Demande à Supabase de marquer les messages comme lus
-            await fetch('/api/mark-read', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contact_number: num })
-            });
+            // 1. On marque comme lu DIRECTEMENT dans Supabase
+            await marquerCommeLuDirectement(num);
             
+            // 2. On affiche les messages
             chargerMessages();
         }
 
-        // LA CORRECTION EST ICI
         function retourListe() {
             document.getElementById('chat-ecran').style.display = 'none';
             document.getElementById('liste-ecran').style.display = 'flex';
             currentContact = null;
-            
-            // On attend 1 seconde avant de recharger la liste pour être sûr que Supabase a bien enregistré
-            setTimeout(() => {
-                chargerContacts();
-            }, 1000); 
+            chargerContacts(); // Le badge aura disparu
         }
-        // ----------------------
 
         async function chargerMessages() {
             if (!currentContact) return;
@@ -152,10 +157,16 @@
             const input = document.getElementById('message-input');
             if (!input.value || !currentContact) return;
             input.disabled = true;
+            
+            // On envoie le message via le serveur Render
             await fetch('/api/send', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ to: currentContact, text: input.value })
             });
+            
+            // DÈS QU'ON RÉPOND, ON FORCE SUPABASE À METTRE LE BADGE À ZÉRO
+            await marquerCommeLuDirectement(currentContact);
+
             input.value = '';
             input.disabled = false;
             chargerMessages();
@@ -168,7 +179,12 @@
             formData.append('image', file);
             formData.append('to', currentContact);
             document.getElementById('image-input').value = ''; 
+            
             await fetch('/api/send-image', { method: 'POST', body: formData });
+            
+            // Même chose pour les images
+            await marquerCommeLuDirectement(currentContact);
+            
             chargerMessages();
         }
 
