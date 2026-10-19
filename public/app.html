@@ -17,15 +17,13 @@
         .message { margin-bottom: 10px; padding: 10px; border-radius: 8px; max-width: 60%; clear: both; word-wrap: break-word; }
         .inbound { background: white; float: left; }
         .outbound { background: #dcf8c6; float: right; }
-        .input-area { display: flex; padding: 10px; background: #f0f0f0; }
+        .input-area { display: flex; padding: 10px; background: #f0f0f0; border-top: 1px solid #ddd; }
         .input-area input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; margin-right: 10px; }
         .input-area button { background: #075e54; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="sidebar" id="sidebar">
-        <!-- Liste des contacts -->
-    </div>
+    <div class="sidebar" id="sidebar"></div>
     <div class="chat-area">
         <div class="chat-header" id="chat-header">Sélectionnez une conversation</div>
         <div class="messages" id="messages-area"></div>
@@ -46,12 +44,9 @@
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
             const data = await response.json();
-            
             const contacts = {};
             data.forEach(msg => {
-                if (!contacts[msg.contact_number]) {
-                    contacts[msg.contact_number] = msg.contact_name || msg.contact_number;
-                }
+                if (!contacts[msg.contact_number]) contacts[msg.contact_number] = msg.contact_name || msg.contact_number;
             });
 
             const sidebar = document.getElementById('sidebar');
@@ -93,30 +88,35 @@
             const texte = input.value;
             if (!texte) return;
 
-            await fetch('/api/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: currentContact, text: texte })
-            });
+            input.value = 'Envoi...';
+            input.disabled = true;
+
+            try {
+                const response = await fetch('/api/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: currentContact, text: texte })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    // AFFICHER L'ERREUR RÉELLE
+                    alert("Erreur du serveur : " + (result.error || "Inconnue"));
+                }
+                
+            } catch (e) {
+                alert("Erreur de connexion au serveur.");
+            }
 
             input.value = '';
+            input.disabled = false;
             chargerConversation(currentContact, currentContactName);
         }
 
-        // Charger au démarrage
-        window.onload = function() {
-            chargerContacts();
-        };
-
-        // Rafraîchir automatiquement toutes les 3 secondes
+        window.onload = function() { chargerContacts(); };
         setInterval(function() {
-            if (currentContact) {
-                // Si on est dans une conversation, on recharge la conversation
-                chargerConversation(currentContact, currentContactName);
-            } else {
-                // Sinon, on recharge la liste des contacts
-                chargerContacts();
-            }
+            if (currentContact) chargerConversation(currentContact, currentContactName);
         }, 3000);
     </script>
 </body>
