@@ -12,6 +12,7 @@
         #liste-ecran { display: flex; flex-direction: column; height: 100%; background: white; }
         .header-list { background: #075e54; color: white; padding: 15px; font-size: 1.2em; font-weight: bold; }
         
+        /* ONGLETS */
         .tabs { display: flex; background: #f0f0f0; border-bottom: 1px solid #ddd; }
         .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; font-weight: bold; color: #555; }
         .tab.active { color: #075e54; border-bottom: 3px solid #075e54; background: white; }
@@ -22,7 +23,6 @@
         .contact-info { flex: 1; }
         .contact-name { font-weight: bold; font-size: 1.1em; margin-bottom: 3px; }
         .contact-preview { color: #888; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-        .badge { background: #25d366; color: white; border-radius: 50%; padding: 4px 8px; font-size: 0.8em; font-weight: bold; }
 
         /* ECRAN 2 : CHAT */
         #chat-ecran { display: none; flex-direction: column; height: 100%; }
@@ -86,25 +86,27 @@
                         name: m.contact_name, 
                         photo: m.profile_picture, 
                         lastMsg: m.content, 
-                        unreadCount: 0 
+                        hasUnread: false // On utilise un simple booléen au lieu d'un compteur
                     };
                 }
-                if (m.direction === 'inbound' && m.is_read === false) contacts[m.contact_number].unreadCount++;
+                // Si un message entrant n'est pas lu, on marque la conversation comme "non lue"
+                if (m.direction === 'inbound' && m.is_read === false) {
+                    contacts[m.contact_number].hasUnread = true;
+                }
             });
 
             const list = document.getElementById('contacts-list');
             list.innerHTML = '';
             
             for (const [num, info] of Object.entries(contacts)) {
-                // Filtrage selon l'onglet
-                if (currentOnglet === 'non-lus' && info.unreadCount === 0) continue;
-                if (currentOnglet === 'lus' && info.unreadCount > 0) continue;
+                // Filtrage strict selon l'onglet
+                if (currentOnglet === 'non-lus' && !info.hasUnread) continue;
+                if (currentOnglet === 'lus' && info.hasUnread) continue;
 
                 const div = document.createElement('div');
                 div.className = 'contact-item';
                 div.onclick = () => ouvrirConversation(num, info.name, info.photo);
                 
-                const badgeHtml = info.unreadCount > 0 ? `<div class="badge">${info.unreadCount}</div>` : '';
                 const imgHtml = info.photo ? `<img src="${info.photo}" class="avatar">` : `<div class="avatar"></div>`;
                 
                 div.innerHTML = `
@@ -113,12 +115,14 @@
                         <div class="contact-name">${info.name || num}</div>
                         <div class="contact-preview">${info.lastMsg}</div>
                     </div>
-                    ${badgeHtml}
                 `;
                 list.appendChild(div);
             }
             
-            if(list.innerHTML === '') list.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Aucune discussion ici.</div>';
+            if(list.innerHTML === '') {
+                const msgVide = currentOnglet === 'non-lus' ? 'Aucun message non lu.' : 'Aucune discussion.';
+                list.innerHTML = `<div style="padding:20px; text-align:center; color:#888;">${msgVide}</div>`;
+            }
         }
 
         function changerOnglet(onglet) {
@@ -137,18 +141,21 @@
             const img = document.getElementById('chat-avatar');
             if (photo) { img.src = photo; img.style.display = 'block'; } else { img.style.display = 'none'; }
 
+            // Marquer comme lu dans la base de données
             await fetch('/api/mark-read', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contact_number: num })
             });
-            await chargerMessages();
+            
+            // On attend un petit peu que Supabase enregistre le changement avant de charger
+            setTimeout(() => { chargerMessages(); }, 500); 
         }
 
         function retourListe() {
             document.getElementById('chat-ecran').style.display = 'none';
             document.getElementById('liste-ecran').style.display = 'flex';
             currentContact = null;
-            chargerContacts();
+            chargerContacts(); // Met à jour la liste immédiatement pour que la conversation passe dans "Lus"
         }
 
         async function chargerMessages() {
@@ -164,7 +171,6 @@
                 d.className = `message ${m.direction}`;
                 let checkHtml = m.direction === 'outbound' ? (m.wa_message_id ? '<span class="check blue">✓✓</span>' : '<span class="check">✓</span>') : '';
                 
-                // Affichage du texte ET de l'image si elle existe
                 let imgHtml = m.media_url ? `<img src="${m.media_url}" onclick="window.open(this.src)">` : '';
                 d.innerHTML = `${m.content} ${imgHtml} ${checkHtml}`;
                 
@@ -198,7 +204,15 @@
         }
 
         window.onload = chargerContacts;
-        setInterval(() => { if (currentContact) chargerMessages(); else chargerContacts(); }, 3000);
+        
+        // Rafraîchissement automatique
+        setInterval(() => { 
+            if (currentContact) {
+                chargerMessages(); 
+            } else {
+                chargerContacts(); 
+            }
+        }, 3000);
     </script>
 </body>
 </html>
