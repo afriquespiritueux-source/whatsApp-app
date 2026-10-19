@@ -8,8 +8,8 @@ app.use(express.static('public'));
 
 cloudinary.config({ 
   cloud_name: 'isg597un', 
-  api_key: 'VOTRE_API_KEY_CLOUDINARY', 
-  api_secret: 'VOTRE_API_SECRET_CLOUDINARY', 
+  api_key: '258228953483391', 
+  api_secret: 'bfaUrIGG7trkMEs0QTLTP7XDz-g', 
   secure: true 
 });
 
