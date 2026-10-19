@@ -8,6 +8,7 @@
         * { box-sizing: border-box; }
         body { font-family: Arial, sans-serif; margin: 0; height: 100vh; background: #e5ddd5; overflow: hidden; }
         
+        /* ECRAN 1 : LISTE */
         #liste-ecran { display: flex; flex-direction: column; height: 100%; background: white; }
         .header-list { background: #075e54; color: white; padding: 15px; font-size: 1.2em; font-weight: bold; }
         .contact-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
@@ -18,6 +19,7 @@
         .contact-preview { color: #888; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
         .badge { background: #25d366; color: white; border-radius: 50%; padding: 3px 8px; font-size: 0.8em; font-weight: bold; margin-left: 10px; }
 
+        /* ECRAN 2 : CHAT */
         #chat-ecran { display: none; flex-direction: column; height: 100%; }
         .header-chat { background: #075e54; color: white; padding: 10px 15px; display: flex; align-items: center; font-weight: bold; }
         .back-btn { font-size: 1.5em; margin-right: 15px; cursor: pointer; }
@@ -120,12 +122,7 @@
             msgs.forEach(m => {
                 const d = document.createElement('div');
                 d.className = `message ${m.direction}`;
-                
-                let checkHtml = '';
-                if (m.direction === 'outbound') {
-                    // Affiche une cloche si envoyé, deux cloches si confirmé par Meta
-                    checkHtml = m.wa_message_id ? '<span class="check blue">✓✓</span>' : '<span class="check">✓</span>';
-                }
+                let checkHtml = m.direction === 'outbound' ? (m.wa_message_id ? '<span class="check blue">✓✓</span>' : '<span class="check">✓</span>') : '';
                 d.innerHTML = m.content + checkHtml;
                 area.appendChild(d);
             });
@@ -136,13 +133,11 @@
             const input = document.getElementById('message-input');
             if (!input.value || !currentContact) return;
             input.disabled = true;
-            try {
-                await fetch('/api/send', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ to: currentContact, text: input.value })
-                });
-                input.value = '';
-            } catch(e) { console.error(e); }
+            await fetch('/api/send', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: currentContact, text: input.value })
+            });
+            input.value = '';
             input.disabled = false;
             chargerMessages();
         }
@@ -153,10 +148,7 @@
             const formData = new FormData();
             formData.append('image', file);
             formData.append('to', currentContact);
-            
-            const input = document.getElementById('image-input');
-            input.value = ''; // reset
-            
+            document.getElementById('image-input').value = ''; 
             await fetch('/api/send-image', { method: 'POST', body: formData });
             chargerMessages();
         }
