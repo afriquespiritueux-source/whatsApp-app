@@ -8,7 +8,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; height: 100dvh; background: #e5ddd5; overflow: hidden; display: flex; flex-direction: column; }
         
-        /* ECRAN 1 : LISTE */
         #liste-ecran { display: flex; flex-direction: column; height: 100%; background: white; }
         .header-list { background: #075e54; color: white; padding: 15px; font-size: 1.2em; font-weight: bold; }
         
@@ -18,11 +17,8 @@
         .contact-info { flex: 1; }
         .contact-name { font-weight: bold; font-size: 1.1em; margin-bottom: 3px; }
         .contact-preview { color: #888; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-        
-        /* LE BADGE VERT */
         .badge { background: #25d366; color: white; border-radius: 50%; padding: 4px 8px; font-size: 0.8em; font-weight: bold; }
 
-        /* ECRAN 2 : CHAT */
         #chat-ecran { display: none; flex-direction: column; height: 100%; }
         .header-chat { background: #075e54; color: white; padding: 10px 15px; display: flex; align-items: center; font-weight: bold; flex-shrink: 0; }
         .back-btn { font-size: 1.5em; margin-right: 15px; cursor: pointer; }
@@ -65,7 +61,7 @@
         let currentContact = null;
 
         async function chargerContacts() {
-            // On récupère tous les messages
+            // On récupère l'historique complet, trié du plus récent au plus ancien
             const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name,content,is_read,direction&order=created_at.desc`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
@@ -74,13 +70,14 @@
             const contacts = {};
             data.forEach(m => { 
                 if (!contacts[m.contact_number]) {
+                    // CORRECTION : On ne prend le nom QUE si ce n'est pas "Moi"
                     contacts[m.contact_number] = { 
-                        name: m.contact_name, 
+                        name: m.contact_name !== 'Moi' ? m.contact_name : m.contact_number, 
                         lastMsg: m.content, 
                         unreadCount: 0 
                     };
                 }
-                // Si le message est entrant et non lu, on ajoute 1 au compteur
+                // CORRECTION : On compte les non lus uniquement si le message est entrant
                 if (m.direction === 'inbound' && m.is_read === false) {
                     contacts[m.contact_number].unreadCount++;
                 }
@@ -94,13 +91,13 @@
                 div.className = 'contact-item';
                 div.onclick = () => ouvrirConversation(num, info.name);
                 
-                // On affiche le badge seulement si unreadCount > 0
+                // On affiche le badge SEULEMENT s'il y a des non lus
                 const badgeHtml = info.unreadCount > 0 ? `<div class="badge">${info.unreadCount}</div>` : '';
                 
                 div.innerHTML = `
                     <div class="avatar"></div>
                     <div class="contact-info">
-                        <div class="contact-name">${info.name || num}</div>
+                        <div class="contact-name">${info.name}</div>
                         <div class="contact-preview">${info.lastMsg}</div>
                     </div>
                     ${badgeHtml}
@@ -113,9 +110,9 @@
             currentContact = num;
             document.getElementById('liste-ecran').style.display = 'none';
             document.getElementById('chat-ecran').style.display = 'flex';
-            document.getElementById('chat-nom').innerText = nom || num;
+            document.getElementById('chat-nom').innerText = nom;
 
-            // On marque les messages comme lus dans Supabase
+            // Marquer comme lu
             await fetch('/api/mark-read', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contact_number: num })
@@ -128,7 +125,7 @@
             document.getElementById('chat-ecran').style.display = 'none';
             document.getElementById('liste-ecran').style.display = 'flex';
             currentContact = null;
-            chargerContacts(); // La liste se met à jour, le badge disparaît
+            chargerContacts(); 
         }
 
         async function chargerMessages() {
