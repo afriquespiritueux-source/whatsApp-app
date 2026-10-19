@@ -36,19 +36,17 @@
     </div>
 
     <script>
-        // ⚠️ REMPLACEZ PAR VOS VRAIES INFOS SUPABASE
         const SUPABASE_URL = "https://nppaqxfbsjtiguakfkat.supabase.co";
         const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
         let currentContact = null;
+        let currentContactName = "";
 
-        // 1. Charger la liste des contacts
         async function chargerContacts() {
             const response = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name&order=created_at.desc`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
             const data = await response.json();
             
-            // Regrouper par numéro de téléphone
             const contacts = {};
             data.forEach(msg => {
                 if (!contacts[msg.contact_number]) {
@@ -61,15 +59,16 @@
             for (const [numero, nom] of Object.entries(contacts)) {
                 const div = document.createElement('div');
                 div.className = 'contact';
+                if (numero === currentContact) div.classList.add('active');
                 div.onclick = () => chargerConversation(numero, nom);
                 div.innerHTML = `<div class="avatar"></div><div><b>${nom}</b><br><small>${numero}</small></div>`;
                 sidebar.appendChild(div);
             }
         }
 
-        // 2. Charger la conversation avec un contact
         async function chargerConversation(numero, nom) {
             currentContact = numero;
+            currentContactName = nom;
             document.getElementById('chat-header').innerText = nom;
             document.getElementById('input-area').style.display = 'flex';
 
@@ -89,13 +88,11 @@
             area.scrollTop = area.scrollHeight;
         }
 
-        // 3. Envoyer un message via votre serveur Render
         async function envoyerMessage() {
             const input = document.getElementById('message-input');
             const texte = input.value;
             if (!texte) return;
 
-            // Appel à votre serveur Render (qui enverra sur WhatsApp et enregistrera dans Supabase)
             await fetch('/api/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -103,10 +100,24 @@
             });
 
             input.value = '';
-            chargerConversation(currentContact, document.getElementById('chat-header').innerText);
+            chargerConversation(currentContact, currentContactName);
         }
 
-        window.onload = chargerContacts;
+        // Charger au démarrage
+        window.onload = function() {
+            chargerContacts();
+        };
+
+        // Rafraîchir automatiquement toutes les 3 secondes
+        setInterval(function() {
+            if (currentContact) {
+                // Si on est dans une conversation, on recharge la conversation
+                chargerConversation(currentContact, currentContactName);
+            } else {
+                // Sinon, on recharge la liste des contacts
+                chargerContacts();
+            }
+        }, 3000);
     </script>
 </body>
 </html>
