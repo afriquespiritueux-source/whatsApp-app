@@ -10,24 +10,33 @@
         .contact { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: center; }
         .contact:hover { background: #f5f5f5; }
         .contact.active { background: #e9edef; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #ccc; margin-right: 10px; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #ccc; margin-right: 10px; object-fit: cover; }
         .chat-area { width: 70%; display: flex; flex-direction: column; }
-        .chat-header { padding: 15px; background: #075e54; color: white; font-weight: bold; }
+        .chat-header { padding: 15px; background: #075e54; color: white; font-weight: bold; display: flex; align-items: center; cursor: pointer; }
         .messages { flex: 1; padding: 20px; overflow-y: auto; background: #e5ddd5; }
-        .message { margin-bottom: 10px; padding: 10px; border-radius: 8px; max-width: 60%; clear: both; word-wrap: break-word; }
+        .message { margin-bottom: 10px; padding: 10px; border-radius: 8px; max-width: 60%; clear: both; word-wrap: break-word; position: relative; }
         .inbound { background: white; float: left; }
         .outbound { background: #dcf8c6; float: right; }
-        .input-area { display: flex; padding: 10px; background: #f0f0f0; border-top: 1px solid #ddd; }
-        .input-area input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; margin-right: 10px; }
+        .check { font-size: 0.7em; color: #999; margin-left: 5px; }
+        .check.blue { color: #34b7f1; }
+        .input-area { display: flex; padding: 10px; background: #f0f0f0; border-top: 1px solid #ddd; align-items: center; }
+        .input-area input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; margin-right: 10px; }
         .input-area button { background: #075e54; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
+        .file-btn { background: #128c7e; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; margin-right: 10px; font-size: 1.2em; }
+        .my-photo-btn { position: fixed; bottom: 10px; left: 10px; background: #075e54; color: white; border: none; padding: 10px; border-radius: 50%; cursor: pointer; z-index: 999; }
     </style>
 </head>
 <body>
+    <input type="file" id="my-photo-input" accept="image/*" style="display:none;" onchange="uploadMyPhoto()">
+    <button class="my-photo-btn" onclick="document.getElementById('my-photo-input').click()">📷</button>
+
     <div class="sidebar" id="sidebar"></div>
     <div class="chat-area">
         <div class="chat-header" id="chat-header">Sélectionnez une conversation</div>
         <div class="messages" id="messages-area"></div>
         <div class="input-area" id="input-area" style="display: none;">
+            <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="envoyerImage()">
+            <button class="file-btn" onclick="document.getElementById('image-input').click()">📎</button>
             <input type="text" id="message-input" placeholder="Tapez un message...">
             <button onclick="envoyerMessage()">Envoyer</button>
         </div>
@@ -36,88 +45,89 @@
     <script>
         const SUPABASE_URL = "https://nppaqxfbsjtiguakfkat.supabase.co";
         const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
-        let currentContact = null;
-        let currentContactName = "";
+        let currentContact = null, currentName = "", currentPhoto = "";
 
         async function chargerContacts() {
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name&order=created_at.desc`, {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?select=contact_number,contact_name,profile_picture&order=created_at.desc`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
-            const data = await response.json();
+            const data = await res.json();
             const contacts = {};
-            data.forEach(msg => {
-                if (!contacts[msg.contact_number]) contacts[msg.contact_number] = msg.contact_name || msg.contact_number;
-            });
+            data.forEach(m => { if (!contacts[m.contact_number]) contacts[m.contact_number] = { name: m.contact_name, photo: m.profile_picture }; });
 
             const sidebar = document.getElementById('sidebar');
             sidebar.innerHTML = '';
-            for (const [numero, nom] of Object.entries(contacts)) {
+            for (const [num, info] of Object.entries(contacts)) {
                 const div = document.createElement('div');
-                div.className = 'contact';
-                if (numero === currentContact) div.classList.add('active');
-                div.onclick = () => chargerConversation(numero, nom);
-                div.innerHTML = `<div class="avatar"></div><div><b>${nom}</b><br><small>${numero}</small></div>`;
+                div.className = 'contact' + (num === currentContact ? ' active' : '');
+                div.onclick = () => chargerConversation(num, info.name, info.photo);
+                const img = info.photo ? `<img src="${info.photo}" class="avatar">` : `<div class="avatar"></div>`;
+                div.innerHTML = `${img}<div><b>${info.name}</b><br><small>${num}</small></div>`;
                 sidebar.appendChild(div);
             }
         }
 
-        async function chargerConversation(numero, nom) {
-            currentContact = numero;
-            currentContactName = nom;
-            document.getElementById('chat-header').innerText = nom;
+        async function chargerConversation(num, nom, photo) {
+            currentContact = num; currentName = nom; currentPhoto = photo;
+            const h = document.getElementById('chat-header');
+            h.innerHTML = (photo ? `<img src="${photo}" class="avatar" style="width:30px;height:30px;margin-right:10px;">` : '') + nom;
+            h.onclick = () => alert(`Nom : ${nom}\nNuméro : ${num}`);
             document.getElementById('input-area').style.display = 'flex';
 
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${numero}&order=created_at.asc`, {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${num}&order=created_at.asc`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
-            const messages = await response.json();
-
+            const msgs = await res.json();
             const area = document.getElementById('messages-area');
             area.innerHTML = '';
-            messages.forEach(msg => {
-                const div = document.createElement('div');
-                div.className = `message ${msg.direction}`;
-                div.innerText = msg.content;
-                area.appendChild(div);
+            msgs.forEach(m => {
+                const d = document.createElement('div');
+                d.className = `message ${m.direction}`;
+                let checkHtml = '';
+                if (m.direction === 'outbound') {
+                    // On affiche une double coche bleue si le message a un ID WhatsApp (donc envoyé)
+                    checkHtml = m.wa_message_id ? '<span class="check blue">✓✓</span>' : '<span class="check">✓</span>';
+                }
+                d.innerHTML = m.content + checkHtml;
+                area.appendChild(d);
             });
             area.scrollTop = area.scrollHeight;
         }
 
         async function envoyerMessage() {
             const input = document.getElementById('message-input');
-            const texte = input.value;
-            if (!texte) return;
-
-            input.value = 'Envoi...';
-            input.disabled = true;
-
-            try {
-                const response = await fetch('/api/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ to: currentContact, text: texte })
-                });
-                
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    // AFFICHER L'ERREUR RÉELLE
-                    alert("Erreur du serveur : " + (result.error || "Inconnue"));
-                }
-                
-            } catch (e) {
-                alert("Erreur de connexion au serveur.");
-            }
-
+            if (!input.value) return;
+            await fetch('/api/send', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: currentContact, text: input.value })
+            });
             input.value = '';
-            input.disabled = false;
-            chargerConversation(currentContact, currentContactName);
+            chargerConversation(currentContact, currentName, currentPhoto);
         }
 
-        window.onload = function() { chargerContacts(); };
-        setInterval(function() {
-            if (currentContact) chargerConversation(currentContact, currentContactName);
-        }, 3000);
+        async function envoyerImage() {
+            const file = document.getElementById('image-input').files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('to', currentContact);
+            alert("Envoi de l'image en cours...");
+            await fetch('/api/send-image', { method: 'POST', body: formData });
+            chargerConversation(currentContact, currentName, currentPhoto);
+        }
+
+        async function uploadMyPhoto() {
+            const file = document.getElementById('my-photo-input').files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('image', file);
+            alert("Upload de votre photo...");
+            await fetch('/api/upload-my-photo', { method: 'POST', body: formData });
+            alert("Photo mise à jour !");
+        }
+
+        window.onload = chargerContacts;
+        setInterval(() => { if (currentContact) chargerConversation(currentContact, currentName, currentPhoto); else chargerContacts(); }, 3000);
     </script>
 </body>
 </html>
