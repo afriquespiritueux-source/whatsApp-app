@@ -60,19 +60,14 @@
         const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
         let currentContact = null;
 
-        // Fonction pour dire directement à Supabase de marquer comme lu
         async function marquerCommeLuDirectement(num) {
             try {
                 await fetch(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${num}&direction=eq.inbound`, {
                     method: 'PATCH',
-                    headers: { 
-                        "apikey": SUPABASE_KEY, 
-                        "Authorization": `Bearer ${SUPABASE_KEY}`, 
-                        "Content-Type": "application/json" 
-                    },
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ is_read: true })
                 });
-            } catch(e) { console.log("Erreur marquage lu", e); }
+            } catch(e) { console.log(e); }
         }
 
         async function chargerContacts() {
@@ -90,7 +85,6 @@
                         unreadCount: 0 
                     };
                 }
-                // On ne compte que les messages entrants non lus
                 if (m.direction === 'inbound' && m.is_read === false) {
                     contacts[m.contact_number].unreadCount++;
                 }
@@ -103,17 +97,8 @@
                 const div = document.createElement('div');
                 div.className = 'contact-item';
                 div.onclick = () => ouvrirConversation(num, info.name);
-                
                 const badgeHtml = info.unreadCount > 0 ? `<div class="badge">${info.unreadCount}</div>` : '';
-                
-                div.innerHTML = `
-                    <div class="avatar"></div>
-                    <div class="contact-info">
-                        <div class="contact-name">${info.name}</div>
-                        <div class="contact-preview">${info.lastMsg}</div>
-                    </div>
-                    ${badgeHtml}
-                `;
+                div.innerHTML = `<div class="avatar"></div><div class="contact-info"><div class="contact-name">${info.name}</div><div class="contact-preview">${info.lastMsg}</div></div>${badgeHtml}`;
                 list.appendChild(div);
             }
         }
@@ -123,10 +108,7 @@
             document.getElementById('liste-ecran').style.display = 'none';
             document.getElementById('chat-ecran').style.display = 'flex';
             document.getElementById('chat-nom').innerText = nom;
-
-            // On marque comme lu
             await marquerCommeLuDirectement(num);
-            
             chargerMessages();
         }
 
@@ -155,21 +137,34 @@
             area.scrollTop = area.scrollHeight;
         }
 
+        // ---- NOUVELLE FONCTION ENVOI (Affichage instantané) ----
         async function envoyerMessage() {
             const input = document.getElementById('message-input');
-            if (!input.value || !currentContact) return;
-            input.disabled = true;
-            
-            // 1. Envoi du message
-            await fetch('/api/send', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: currentContact, text: input.value })
-            });
-            
-            // 2. On marque comme lu DIRECTEMENT (ça va marcher maintenant que le RLS est désactivé)
-            await marquerCommeLuDirectement(currentContact);
+            const texte = input.value;
+            if (!texte || !currentContact) return;
 
+            // 1. AFFICHER LE MESSAGE IMMÉDIATEMENT (sans attendre)
+            const area = document.getElementById('messages-area');
+            const d = document.createElement('div');
+            d.className = 'message outbound';
+            d.innerHTML = `${texte} <span style="font-size:0.7em; color:#888;">⏳ Envoi...</span>`;
+            area.appendChild(d);
+            area.scrollTop = area.scrollHeight;
+
+            // 2. Vider le champ et désactiver le bouton pour éviter les doubles clics
             input.value = '';
+            input.disabled = true;
+
+            try {
+                // 3. Envoyer au serveur en arrière-plan
+                await fetch('/api/send', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: currentContact, text: texte })
+                });
+                await marquerCommeLuDirectement(currentContact);
+            } catch(e) { console.log(e); }
+
+            // 4. Réactiver le bouton et recharger les vrais messages (qui remplaceront le "Envoi...")
             input.disabled = false;
             chargerMessages();
         }
@@ -177,13 +172,25 @@
         async function envoyerMedia() {
             const file = document.getElementById('image-input').files[0];
             if (!file || !currentContact) return;
+            
+            // Afficher un message d'attente instantané
+            const area = document.getElementById('messages-area');
+            const d = document.createElement('div');
+            d.className = 'message outbound';
+            d.innerHTML = `[Image en cours d'envoi... ⏳]`;
+            area.appendChild(d);
+            area.scrollTop = area.scrollHeight;
+
             const formData = new FormData();
             formData.append('image', file);
             formData.append('to', currentContact);
             document.getElementById('image-input').value = ''; 
             
-            await fetch('/api/send-image', { method: 'POST', body: formData });
-            await marquerCommeLuDirectement(currentContact);
+            try {
+                await fetch('/api/send-image', { method: 'POST', body: formData });
+                await marquerCommeLuDirectement(currentContact);
+            } catch(e) { console.log(e); }
+
             chargerMessages();
         }
 
