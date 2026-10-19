@@ -9,12 +9,12 @@ app.use(express.static('public'));
 // ⚠️ CONFIGURATION (À REMPLIR ABSOLUMENT)
 cloudinary.config({ 
   cloud_name: 'isg597un', 
-  api_key: '258228953483391', 
-  api_secret: 'bfaUrIGG7trkMEs0QTLTP7XDz-g', 
+  api_key: '258228953483391',     // <-- À REMPLACER
+  api_secret: 'bfaUrIGG7trkMEs0QTLTP7XDz-g', // <-- À REMPLACER
   secure: true 
 });
 const upload = multer({ storage: multer.memoryStorage() });
-const WHATSAPP_TOKEN = "EAATttGsWz8kBS8dmMrUQjA8Kzsmd7VRaOfrPnZBYfloGJfJeAeK4IIBfx7mSluqBVESctdTz94zWrXHd0GNotUGeCzXWFgi10qUi8usNb7g9jolwSFTdMaO4TPfCUlhWhMEnG3vADHZA1d8ZBDFpyGXiOmSebnTGZACA1zpIoZB7ZBwBriqYhgXsbaZCxsU6wZDZD"; 
+const WHATSAPP_TOKEN = "EAATttGsWz8kBS8dmMrUQjA8Kzsmd7VRaOfrPnZBYfloGJfJeAeK4IIBfx7mSluqBVESctdTz94zWrXHd0GNotUGeCzXWFgi10qUi8usNb7g9jolwSFTdMaO4TPfCUlhWhMEnG3vADHZA1d8ZBDFpyGXiOmSebnTGZACA1zpIoZB7ZBwBriqYhgXsbaZCxsU6wZDZD"; // <-- À REMPLACER
 const PHONE_NUMBER_ID = "1360862047116900";
 const SUPABASE_URL = "https://nppaqxfbsjtiguakfkat.supabase.co";
 const SUPABASE_KEY = "sb_publishable_AndUnPjRmEA4Q7fsm037Kg_mkmFkN2W";
@@ -22,7 +22,7 @@ const VERIFY_TOKEN = "mon_token_secret_123";
 
 console.log("Démarrage du serveur...");
 
-// Récupérer la photo de profil
+// Récupérer la photo de profil du client
 async function getProfilePicture(number) {
     try {
         const res = await axios.get(`https://graph.facebook.com/v21.0/${number}?fields=profile_picture_url`, {
@@ -35,7 +35,7 @@ async function getProfilePicture(number) {
     }
 }
 
-// 1. VERIFICATION WEBHOOK
+// 1. VERIFICATION WEBHOOK (Meta)
 app.get('/webhook', (req, res) => {
     console.log("Vérification Webhook reçue...");
     if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
@@ -47,7 +47,7 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// 2. RECEPTION DES MESSAGES
+// 2. RECEPTION DES MESSAGES (Texte et Images)
 app.post('/webhook', async (req, res) => {
     console.log("--- Nouveau message reçu ---");
     try {
@@ -57,9 +57,37 @@ app.post('/webhook', async (req, res) => {
             if (value.messages && value.messages[0]) {
                 const message = value.messages[0];
                 let text = message.text ? message.text.body : "[Média]";
-                if (message.image) text = "[Image reçue]";
-                
-                console.log("De :", message.from, "| Message :", text);
+                let mediaUrl = null;
+
+                // Si c'est une image, on la télécharge et on l'envoie sur Cloudinary
+                if (message.image) {
+                    text = "[Image reçue]";
+                    console.log("Récupération de l'image depuis Meta...");
+                    try {
+                        // 1. Obtenir le lien de l'image via Meta
+                        const mediaRes = await axios.get(`https://graph.facebook.com/v21.0/${message.image.id}`, {
+                            headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+                        });
+                        const imageUrl = mediaRes.data.url;
+                        
+                        // 2. Télécharger l'image
+                        const imageBuffer = await axios.get(imageUrl, {
+                            headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+                            responseType: 'arraybuffer'
+                        });
+                        
+                        // 3. Uploader sur Cloudinary
+                        const result = await new Promise((resolve, reject) => {
+                            cloudinary.uploader.upload_stream({ resource_type: 'image' }, (error, result) => {
+                                if (error) reject(error); else resolve(result);
+                            }).end(imageBuffer.data);
+                        });
+                        mediaUrl = result.secure_url;
+                        console.log("Image sauvegardée sur Cloudinary :", mediaUrl);
+                    } catch (imgError) {
+                        console.log("Erreur lors du traitement de l'image :", imgError.message);
+                    }
+                }
 
                 const photoUrl = await getProfilePicture(message.from);
 
@@ -69,7 +97,8 @@ app.post('/webhook', async (req, res) => {
                     direction: 'inbound',
                     content: text,
                     profile_picture: photoUrl,
-                    is_read: false
+                    is_read: false,
+                    media_url: mediaUrl
                 }, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' } });
                 
                 console.log("Message enregistré dans Supabase !");
@@ -104,7 +133,7 @@ app.post('/api/send', async (req, res) => {
     }
 });
 
-// 4. ENVOI DE PHOTO/VIDEO
+// 4. ENVOI DE PHOTO
 app.post('/api/send-image', upload.single('image'), async (req, res) => {
     const { to } = req.body;
     console.log("--- Tentative d'envoi de média à", to, "---");
@@ -124,7 +153,7 @@ app.post('/api/send-image', upload.single('image'), async (req, res) => {
         console.log("Meta a accepté l'image !");
 
         await axios.post(`${SUPABASE_URL}/rest/v1/messages`, {
-            contact_number: to, contact_name: 'Moi', direction: 'outbound', content: '[Image envoyée]', wa_message_id: waRes.data.messages[0].id, is_read: true
+            contact_number: to, contact_name: 'Moi', direction: 'outbound', content: '[Image envoyée]', wa_message_id: waRes.data.messages[0].id, is_read: true, media_url: result.secure_url
         }, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' } });
 
         res.json({ success: true });
@@ -134,7 +163,7 @@ app.post('/api/send-image', upload.single('image'), async (req, res) => {
     }
 });
 
-// 5. MARQUER COMME LU
+// 5. MARQUER COMME LU (pour les badges)
 app.post('/api/mark-read', async (req, res) => {
     const { contact_number } = req.body;
     try {
