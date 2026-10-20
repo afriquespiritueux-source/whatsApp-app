@@ -27,6 +27,7 @@
         .inbound { background: white; align-self: flex-start; }
         .outbound { background: #dcf8c6; align-self: flex-end; }
         .message img { max-width: 100%; border-radius: 5px; margin-top: 5px; display: block; cursor: pointer;}
+        .message audio { max-width: 100%; margin-top: 5px; display: block; }
         
         .input-area { display: flex; padding: 10px; background: #f0f0f0; align-items: center; flex-shrink: 0; }
         .input-area input[type="text"] { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 20px; margin-right: 10px; font-size: 1em; }
@@ -128,8 +129,6 @@
             document.getElementById('chat-ecran').style.display = 'flex';
             document.getElementById('chat-nom').innerText = nom;
             await marquerCommeLuDirectement(num);
-            
-            // On charge les messages, puis on force le défilement vers le bas
             await chargerMessages(true);
         }
 
@@ -148,29 +147,35 @@
             const msgs = await res.json();
             const area = document.getElementById('messages-area');
             
-            // On garde la position actuelle de l'utilisateur
             const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 50;
             
             area.innerHTML = '';
             msgs.forEach(m => {
                 const d = document.createElement('div');
                 d.className = `message ${m.direction}`;
-                let imgHtml = m.media_url ? `<img src="${m.media_url}" onclick="window.open(this.src)">` : '';
-                d.innerHTML = `${m.content} ${imgHtml}`;
+                
+                // GESTION DE L'AFFICHAGE (IMAGE / AUDIO / TEXTE)
+                let mediaHtml = '';
+                if (m.media_url) {
+                    if (m.content === "[Audio reçu]" || m.media_url.match(/\.(mp3|ogg|wav|m4a)$/i) || m.media_url.includes('/video/upload/')) {
+                        mediaHtml = `<audio controls src="${m.media_url}"></audio>`;
+                    } else {
+                        mediaHtml = `<img src="${m.media_url}" onclick="window.open(this.src)">`;
+                    }
+                }
+                
+                d.innerHTML = `${m.content} ${mediaHtml}`;
                 area.appendChild(d);
             });
 
-            // Si on demande de forcer le scroll (ouverture) ou si l'utilisateur était déjà en bas, on descend
             if (forceScrollBottom || isAtBottom) {
                 area.scrollTop = area.scrollHeight;
             }
         }
 
-        // Fonction pour gérer l'apparition de la flèche
         function gererScroll() {
             const area = document.getElementById('messages-area');
             const btn = document.getElementById('scroll-down-btn');
-            // Si on est à plus de 100px du bas, on affiche la flèche
             if (area.scrollHeight - area.scrollTop > area.clientHeight + 100) {
                 btn.style.display = 'block';
             } else {
@@ -178,7 +183,6 @@
             }
         }
 
-        // Fonction pour descendre en bas quand on clique sur la flèche
         function descendreEnBas() {
             const area = document.getElementById('messages-area');
             area.scrollTop = area.scrollHeight;
@@ -209,7 +213,7 @@
             } catch(e) { console.log(e); }
 
             input.disabled = false;
-            chargerMessages(true); // Force le scroll en bas après envoi
+            chargerMessages(true);
         }
 
         async function envoyerMedia() {
@@ -233,12 +237,11 @@
                 await marquerCommeLuDirectement(currentContact);
             } catch(e) { console.log(e); }
 
-            chargerMessages(true); // Force le scroll en bas après envoi
+            chargerMessages(true);
         }
 
         window.onload = chargerContacts;
         
-        // On rafraîchit, mais on ne force PAS le scroll s'il n'y en a pas besoin
         setInterval(() => { 
             if (currentContact) {
                 chargerMessages(false); 
