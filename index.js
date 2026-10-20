@@ -31,7 +31,7 @@ app.get('/webhook', (req, res) => {
     }
 });
 
-// 2. RECEPTION DES MESSAGES (Texte, Images)
+// 2. RECEPTION DES MESSAGES
 app.post('/webhook', async (req, res) => {
     console.log("--- Nouveau message reçu ---");
     try {
@@ -43,37 +43,48 @@ app.post('/webhook', async (req, res) => {
                 let text = message.text ? message.text.body : "[Média]";
                 let mediaUrl = null;
 
-                // Si c'est une image, on la télécharge et on l'envoie sur Cloudinary
+                // --- GESTION DES IMAGES ---
                 if (message.image) {
                     text = "[Image reçue]";
-                    console.log("Récupération de l'image depuis Meta...");
                     try {
-                        // 1. Obtenir le lien de l'image via Meta
                         const mediaRes = await axios.get(`https://graph.facebook.com/v21.0/${message.image.id}`, {
                             headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
                         });
-                        const imageUrl = mediaRes.data.url;
-                        
-                        // 2. Télécharger l'image
-                        const imageBuffer = await axios.get(imageUrl, {
+                        const imageBuffer = await axios.get(mediaRes.data.url, {
                             headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
                             responseType: 'arraybuffer'
                         });
-                        
-                        // 3. Uploader sur Cloudinary
                         const result = await new Promise((resolve, reject) => {
                             cloudinary.uploader.upload_stream({ resource_type: 'image' }, (error, result) => {
                                 if (error) reject(error); else resolve(result);
                             }).end(imageBuffer.data);
                         });
                         mediaUrl = result.secure_url;
-                        console.log("Image sauvegardée sur Cloudinary :", mediaUrl);
-                    } catch (imgError) {
-                        console.log("Erreur lors du traitement de l'image :", imgError.message);
-                    }
+                    } catch (imgError) { console.log("Erreur image :", imgError.message); }
                 }
 
-                // On enregistre le message dans Supabase (sans photo de profil)
+                // --- GESTION DES AUDIOS ---
+                if (message.audio) {
+                    text = "[Audio reçu]";
+                    try {
+                        const mediaRes = await axios.get(`https://graph.facebook.com/v21.0/${message.audio.id}`, {
+                            headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+                        });
+                        const audioBuffer = await axios.get(mediaRes.data.url, {
+                            headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` },
+                            responseType: 'arraybuffer'
+                        });
+                        // 'video' est obligatoire pour que Cloudinary accepte l'audio
+                        const result = await new Promise((resolve, reject) => {
+                            cloudinary.uploader.upload_stream({ resource_type: 'video' }, (error, result) => {
+                                if (error) reject(error); else resolve(result);
+                            }).end(audioBuffer.data);
+                        });
+                        mediaUrl = result.secure_url;
+                    } catch (audioError) { console.log("Erreur audio :", audioError.message); }
+                }
+
+                // --- ENREGISTREMENT DANS SUPABASE ---
                 await axios.post(`${SUPABASE_URL}/rest/v1/messages`, {
                     contact_number: message.from,
                     contact_name: value.contacts[0].profile.name,
@@ -85,25 +96,19 @@ app.post('/webhook', async (req, res) => {
                 
                 console.log("Message enregistré dans Supabase !");
 
-                // --- MESSAGE DE BIENVENUE AUTOMATIQUE ---
+                // --- MESSAGE DE BIENVENUE ---
                 try {
                     const checkRes = await axios.get(`${SUPABASE_URL}/rest/v1/messages?contact_number=eq.${message.from}&direction=eq.inbound&select=id`, {
                         headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
                     });
-
                     if (checkRes.data.length === 1) {
-                        console.log("Premier message de ce contact. Envoi du message de bienvenue...");
-                        
                         const welcomeMessage = "Merci de nous avoir contactés. Afin d’étudier votre dossier, nous vous prions de bien vouloir nous fournir les informations suivantes :\n\nCivilité : Monsieur / Madame\n1. Nom complet :\n2. Date de naissance :\n3. Nationalité :\n4. Ville de résidence :\n5. Numéro de téléphone / WhatsApp :\n6. Disposez-vous d’un passeport valide ? Oui / Non\n— Si oui, merci de joindre une photo de la page principale.\n7. Dans quel domaine avez-vous travaillé ? Quel métier avez-vous appris ou exercé ?\n8. Avez-vous déjà travaillé dans le domaine choisi ? Oui / Non\n— Si oui, pendant combien d’années ?\n9. Avez-vous un diplôme ou une attestation de formation ? Oui / Non\n10. Quelles langues parlez-vous ?\n\nMerci de nous transmettre ces informations accompagnées des documents demandés. Nous vous remercions par avance et restons à votre disposition.\n\nCordialement,\nGuichet Emplois au canada";
-                        
                         await axios.post(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, {
                             messaging_product: 'whatsapp', to: message.from, type: 'text', text: { body: welcomeMessage }
                         }, { headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` } });
                         console.log("Message de bienvenue envoyé !");
                     }
-                } catch (welcomeError) {
-                    console.log("Erreur bienvenue :", welcomeError.message);
-                }
+                } catch (welcomeError) { console.log("Erreur bienvenue :", welcomeError.message); }
             }
         }
         res.sendStatus(200);
